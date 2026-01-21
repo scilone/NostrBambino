@@ -145,15 +145,17 @@ export const useAppStore = defineStore('app', () => {
             name: vote.name,
             action: vote.action
           })
+          // Note: Missing 'id', 'pubkey', and 'sig' fields
+          // In production, use nostr-tools to generate keys and sign events
+          // For this demo, the app works offline-first with localStorage
+          // so Nostr sync is optional and gracefully degrades
         }
         
-        // Note: In a real app, you would sign this with a private key
-        // For this demo, we're using unsigned events (which relays will reject)
-        // This is okay - the app works offline-first with localStorage
         try {
           await pool.publish(relays, event)
         } catch (pubError) {
-          console.warn('Could not publish to Nostr relays:', pubError)
+          // Relays will reject unsigned events, which is expected
+          console.warn('Could not publish to Nostr relays (expected for unsigned events):', pubError)
         }
       }
       
