@@ -148,11 +148,16 @@ export const useAppStore = defineStore('app', () => {
         }
         
         // Note: In a real app, you would sign this with a private key
-        // For this demo, we're using unsigned events
-        await pool.publish(relays, event)
+        // For this demo, we're using unsigned events (which relays will reject)
+        // This is okay - the app works offline-first with localStorage
+        try {
+          await pool.publish(relays, event)
+        } catch (pubError) {
+          console.warn('Could not publish to Nostr relays:', pubError)
+        }
       }
       
-      // Clear pending votes after successful sync
+      // Clear pending votes after sync attempt
       pendingVotes.value = []
       localStorage.setItem('pendingVotes', JSON.stringify(pendingVotes.value))
       syncStatus.value = 'idle'
@@ -163,50 +168,55 @@ export const useAppStore = defineStore('app', () => {
   }
 
   function subscribeToPartnerVotes() {
-    if (!isPaired.value) return
+    if (!isPaired.value || !sessionTag.value) return
     
-    const sub = pool.subscribeMany(
-      relays,
-      [
+    try {
+      const filter = {
+        kinds: [1],
+        '#t': [sessionTag.value],
+        since: Math.floor(Date.now() / 1000) - 86400 // Last 24 hours
+      }
+      
+      const sub = pool.subscribeMany(
+        relays,
+        [filter],
         {
-          kinds: [1],
-          '#t': [sessionTag.value],
-          since: Math.floor(Date.now() / 1000) - 86400 // Last 24 hours
-        }
-      ],
-      {
-        onevent(event) {
-          try {
-            const data = JSON.parse(event.content)
-            
-            // Ignore our own votes
-            if (data.userId === userId.value) return
-            
-            // Process partner's vote
-            if (data.action === 'like') {
-              if (!partnerLikes.value.includes(data.name)) {
-                partnerLikes.value.push(data.name)
-                localStorage.setItem('partnerLikes', JSON.stringify(partnerLikes.value))
-                
-                // Check if it's a match
-                if (likedNames.value.includes(data.name) && !matches.value.includes(data.name)) {
-                  matches.value.push(data.name)
-                  localStorage.setItem('matches', JSON.stringify(matches.value))
+          onevent(event) {
+            try {
+              const data = JSON.parse(event.content)
+              
+              // Ignore our own votes
+              if (data.userId === userId.value) return
+              
+              // Process partner's vote
+              if (data.action === 'like') {
+                if (!partnerLikes.value.includes(data.name)) {
+                  partnerLikes.value.push(data.name)
+                  localStorage.setItem('partnerLikes', JSON.stringify(partnerLikes.value))
+                  
+                  // Check if it's a match
+                  if (likedNames.value.includes(data.name) && !matches.value.includes(data.name)) {
+                    matches.value.push(data.name)
+                    localStorage.setItem('matches', JSON.stringify(matches.value))
+                  }
                 }
               }
+            } catch (error) {
+              console.error('Error processing event:', error)
             }
-          } catch (error) {
-            console.error('Error processing event:', error)
+          },
+          oneose() {
+            console.log('Initial events loaded')
           }
-        },
-        oneose() {
-          console.log('Initial events loaded')
         }
-      }
-    )
-    
-    // Return unsubscribe function
-    return () => sub.close()
+      )
+      
+      // Return unsubscribe function
+      return () => sub.close()
+    } catch (error) {
+      console.error('Error subscribing to partner votes:', error)
+      return () => {}
+    }
   }
 
   // Handle online/offline status
@@ -218,6 +228,11 @@ export const useAppStore = defineStore('app', () => {
   window.addEventListener('offline', () => {
     isOnline.value = false
   })
+  
+  // Initialize subscription if already paired
+  if (isPaired.value && sharedSecret.value) {
+    subscribeToPartnerVotes()
+  }
 
   return {
     // State

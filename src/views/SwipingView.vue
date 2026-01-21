@@ -8,7 +8,7 @@
             {{ store.isOnline ? '🟢 Online' : '🔴 Offline' }}
           </span>
           <button @click="showMatchesModal = true" class="matches-button">
-            ❤️ {{ store.matches.length }} Matches
+            ❤️ {{ store.matches?.length || 0 }} Matches
           </button>
           <button @click="handleUnpair" class="unpair-button">
             🔓 Unpair
@@ -23,14 +23,14 @@
           <div class="card-content">
             <h2 class="name">{{ store.currentName }}</h2>
             <p class="stats">
-              {{ store.likedNames.length }} liked • 
-              {{ store.passedNames.length }} passed
+              {{ store.likedNames?.length || 0 }} liked • 
+              {{ store.passedNames?.length || 0 }} passed
             </p>
           </div>
         </div>
         
         <!-- Preview card behind -->
-        <div v-if="store.availableNames.length > 1" class="card preview-card">
+        <div v-if="store.availableNames && store.availableNames.length > 1" class="card preview-card">
           <div class="card-content">
             <h2 class="name">{{ store.availableNames[1] }}</h2>
           </div>
@@ -40,7 +40,7 @@
       <div v-else class="no-more-names">
         <h2>🎉 All Done!</h2>
         <p>You've reviewed all available names.</p>
-        <p v-if="store.matches.length > 0">Check your matches below!</p>
+        <p v-if="store.matches && store.matches.length > 0">Check your matches below!</p>
       </div>
 
       <div v-if="store.currentName" class="action-buttons">
@@ -54,7 +54,7 @@
         </button>
       </div>
 
-      <div v-if="store.pendingVotes.length > 0" class="sync-notice">
+      <div v-if="store.pendingVotes && store.pendingVotes.length > 0" class="sync-notice">
         ⏳ {{ store.pendingVotes.length }} vote(s) pending sync
       </div>
     </div>
@@ -67,7 +67,7 @@
           <button @click="showMatchesModal = false" class="close-button">×</button>
         </div>
         <div class="modal-content">
-          <div v-if="store.matches.length === 0" class="empty-matches">
+          <div v-if="!store.matches || store.matches.length === 0" class="empty-matches">
             <p>No matches yet. Keep swiping!</p>
           </div>
           <ul v-else class="matches-list">
@@ -100,8 +100,8 @@ const showMatchNotification = ref(false)
 const lastMatch = ref('')
 
 // Watch for new matches
-watch(() => store.matches.length, (newLength, oldLength) => {
-  if (newLength > oldLength) {
+watch(() => store.matches?.length || 0, (newLength, oldLength) => {
+  if (newLength > oldLength && store.matches && store.matches.length > 0) {
     lastMatch.value = store.matches[store.matches.length - 1]
     showMatchNotification.value = true
     setTimeout(() => {
